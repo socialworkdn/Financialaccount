@@ -1,31 +1,565 @@
 <!DOCTYPE html>
 <html lang="th">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>บัญชีกลุ่มงานสังคมสงเคราะห์</title> <link rel="icon" type="image/png" href="https://img2.pic.in.th/Logo-sw.png">
+    <title>ระบบบัญชีกลุ่มงานสังคมสงเคราะห์</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden; /* ซ่อน Scrollbar ของหน้าหลัก */
-        }
-        iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
+      body { font-family: 'Prompt', sans-serif; }
+      .glass-effect { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(10px); }
+      .nav-active { border-bottom: 3px solid #059669; color: #059669; font-weight: 600; }
+      .nav-inactive { color: #6B7280; }
+      .nav-inactive:hover { color: #059669; }
+      .skeleton { background: linear-gradient(90deg, #eee 25%, #f5f5f5 50%, #eee 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+      @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+      .btn-disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
-</head>
-<body>
+  </head>
+  <body class="bg-gray-100 min-h-screen pb-10">
 
-    <iframe src="https://script.google.com/macros/s/AKfycbw5WyGmycsvq7oMLJHzpNONvsmNV3MN3XgGqQbU8aoC8iRFkScV5V5-g5cBWPFXITObCw/exec">
-        เบราว์เซอร์ของคุณไม่รองรับการแสดงผล iframe
-    </iframe>
+    <!-- ============================================================
+         ตั้งค่า API: วาง URL ของ Apps Script Web App ที่ deploy แล้วตรงนี้
+         ตัวอย่าง: https://script.google.com/macros/s/XXXXXXXXXXXX/exec
+         ============================================================ -->
+    <script>
+      const API_URL = "https://script.google.com/macros/s/AKfycbw5WyGmycsvq7oMLJHzpNONvsmNV3MN3XgGqQbU8aoC8iRFkScV5V5-g5cBWPFXITObCw/exec";
+    </script>
 
-</body>
+    <div id="configWarning" class="hidden bg-yellow-100 border-b border-yellow-300 text-yellow-800 text-sm text-center py-2 px-4">
+      ⚠️ ยังไม่ได้ตั้งค่า API_URL กรุณาแก้ไขในไฟล์ index.html บรรทัดบนสุดของ script
+    </div>
+
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+      <div class="max-w-4xl mx-auto px-4">
+        <div class="flex justify-between items-center h-16">
+          <div class="flex items-center space-x-3">
+             <img src="https://img2.pic.in.th/Logo-sw6944b6d81ee7918a02.png" class="h-10 w-10 rounded-full border border-green-200">
+             <span class="font-bold text-gray-800 hidden sm:block">บัญชีกลุ่มงานสังคมสงเคราะห์</span>
+          </div>
+          <div class="flex space-x-6">
+            <button onclick="switchTab('form')" id="tab-form" class="nav-active py-4 px-2 transition">
+              <i class="fa-solid fa-pen-to-square mr-1"></i> บันทึก
+            </button>
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="nav-inactive py-4 px-2 transition">
+              <i class="fa-solid fa-chart-pie mr-1"></i> สรุปรายงาน
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="max-w-3xl mx-auto mt-6 px-4">
+
+      <!-- ================= ฟอร์มบันทึก ================= -->
+      <div id="formSection" class="glass-effect p-6 rounded-xl shadow-lg border border-white">
+        <h2 class="text-xl font-bold text-gray-700 mb-4 border-l-4 border-green-500 pl-3">บันทึกรายรับ-รายจ่าย</h2>
+        <form id="accountForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">วันที่</label>
+            <input type="date" name="date" required class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">รายการ</label>
+            <input type="text" name="item" placeholder="ระบุรายการ..." required maxlength="200" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+            <select name="category" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none bg-white">
+              <option value="ค่าเดินทาง">ค่าเดินทาง</option>
+              <option value="ค่าอาหาร">ค่าอาหาร</option>
+              <option value="ค่าวัสดุอุปกรณ์">ค่าวัสดุอุปกรณ์</option>
+              <option value="เงินบริจาค/ช่วยเหลือ">เงินบริจาค/ช่วยเหลือ</option>
+              <option value="ค่าสาธารณูปโภค">ค่าสาธารณูปโภค</option>
+              <option value="รายรับโครงการ">รายรับโครงการ</option>
+              <option value="อื่นๆ" selected>อื่นๆ</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-green-700 mb-1">รายรับ (฿)</label>
+              <input type="number" name="income" min="0" step="0.01" placeholder="0.00" class="w-full px-4 py-2 rounded-lg border border-green-200 bg-green-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-red-700 mb-1">รายจ่าย (฿)</label>
+              <input type="number" name="expense" min="0" step="0.01" placeholder="0.00" class="w-full px-4 py-2 rounded-lg border border-red-200 bg-red-50 focus:ring-2 focus:ring-red-500 outline-none">
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 -mt-2">* กรอกได้เพียงช่องเดียว คือ รายรับ หรือ รายจ่าย</p>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">สลิป/หลักฐาน</label>
+            <input type="file" id="fileInput" accept="image/*,application/pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-green-100 file:text-green-700 hover:file:bg-green-200"/>
+            <div id="filePreviewWrap" class="hidden mt-3">
+              <img id="filePreviewImg" class="hidden h-28 rounded-lg border border-gray-200 object-cover">
+              <div id="filePreviewGeneric" class="hidden text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <i class="fa-solid fa-file-pdf text-red-500 mr-1"></i><span id="filePreviewName"></span>
+              </div>
+            </div>
+          </div>
+          <button type="submit" id="submitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow transition transform hover:scale-[1.01] flex items-center justify-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล
+          </button>
+        </form>
+      </div>
+
+      <!-- ================= Dashboard ================= -->
+      <div id="dashboardSection" class="hidden space-y-6">
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white p-5 rounded-xl shadow border-l-4 border-blue-500">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs text-gray-500 uppercase">ยอดคงเหลือสุทธิ</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-1" id="dash-balance">฿0.00</h3>
+              </div>
+              <div class="p-2 bg-blue-100 rounded-lg text-blue-600"><i class="fa-solid fa-wallet"></i></div>
+            </div>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow border-l-4 border-green-500">
+             <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs text-gray-500 uppercase">รายรับทั้งหมด</p>
+                <h3 class="text-xl font-bold text-green-600 mt-1" id="dash-income">฿0.00</h3>
+              </div>
+              <div class="p-2 bg-green-100 rounded-lg text-green-600"><i class="fa-solid fa-arrow-trend-up"></i></div>
+            </div>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow border-l-4 border-red-500">
+             <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs text-gray-500 uppercase">รายจ่ายทั้งหมด</p>
+                <h3 class="text-xl font-bold text-red-600 mt-1" id="dash-expense">฿0.00</h3>
+              </div>
+              <div class="p-2 bg-red-100 rounded-lg text-red-600"><i class="fa-solid fa-arrow-trend-down"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- กราฟ -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-5 rounded-xl shadow">
+            <h3 class="font-bold text-gray-700 mb-3 text-sm"><i class="fa-solid fa-chart-column mr-2 text-green-600"></i>รายรับ-รายจ่ายรายเดือน</h3>
+            <canvas id="monthlyChart" height="180"></canvas>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow">
+            <h3 class="font-bold text-gray-700 mb-3 text-sm"><i class="fa-solid fa-chart-pie mr-2 text-green-600"></i>สัดส่วนรายจ่ายตามหมวดหมู่</h3>
+            <canvas id="categoryChart" height="180"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-gray-50">
+            <h3 class="font-bold text-gray-700"><i class="fa-solid fa-clock-rotate-left mr-2"></i>รายการล่าสุด</h3>
+            <div class="flex items-center gap-2">
+              <input type="text" id="searchBox" placeholder="ค้นหารายการ..." class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none">
+              <a id="downloadExcelBtn" href="#" target="_blank" class="text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition whitespace-nowrap">
+                <i class="fa-solid fa-file-excel mr-1"></i> Excel
+              </a>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                <tr>
+                  <th class="px-4 py-3">วันที่</th>
+                  <th class="px-4 py-3">รายการ</th>
+                  <th class="px-4 py-3">หมวดหมู่</th>
+                  <th class="px-4 py-3 text-right">จำนวนเงิน</th>
+                  <th class="px-4 py-3 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="transactionList" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      let dashCache = null;
+      let monthlyChartInstance = null;
+      let categoryChartInstance = null;
+
+      if (!API_URL || API_URL.indexOf('PASTE_YOUR') === 0) {
+        document.getElementById('configWarning').classList.remove('hidden');
+      }
+
+      // =========================================================
+      //  ตัวช่วยเรียก API
+      //  GET  ใช้สำหรับอ่านข้อมูล (ไม่โดน CORS preflight)
+      //  POST ส่งเป็น text/plain ที่มี JSON อยู่ข้างใน (ไม่โดน CORS preflight เช่นกัน)
+      // =========================================================
+      async function apiGet(action) {
+        const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`);
+        if (!res.ok) throw new Error('เชื่อมต่อ API ไม่สำเร็จ (' + res.status + ')');
+        return res.json();
+      }
+
+      async function apiPost(body) {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // สำคัญ: ต้องเป็น text/plain
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error('เชื่อมต่อ API ไม่สำเร็จ (' + res.status + ')');
+        return res.json();
+      }
+
+      // --- Utility: กัน XSS เวลาใส่ข้อความลง innerHTML ---
+      function escapeHtml(str) {
+        if (str === null || str === undefined) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      const fmtCurrency = (num) => '฿' + new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2 }).format(num || 0);
+
+      // --- Tab Logic ---
+      function switchTab(tabName) {
+        const formSec = document.getElementById('formSection');
+        const dashSec = document.getElementById('dashboardSection');
+        const tabForm = document.getElementById('tab-form');
+        const tabDash = document.getElementById('tab-dashboard');
+
+        if (tabName === 'form') {
+          formSec.classList.remove('hidden');
+          dashSec.classList.add('hidden');
+          tabForm.className = "nav-active py-4 px-2 transition";
+          tabDash.className = "nav-inactive py-4 px-2 transition";
+        } else {
+          formSec.classList.add('hidden');
+          dashSec.classList.remove('hidden');
+          tabForm.className = "nav-inactive py-4 px-2 transition";
+          tabDash.className = "nav-active py-4 px-2 transition";
+          loadDashboardData();
+        }
+      }
+
+      // --- Dashboard Logic ---
+      function showSkeleton() {
+        const tbody = document.getElementById('transactionList');
+        let rows = '';
+        for (let i = 0; i < 5; i++) {
+          rows += `<tr>
+            <td class="px-4 py-3"><div class="skeleton h-4 w-16 rounded"></div></td>
+            <td class="px-4 py-3"><div class="skeleton h-4 w-32 rounded"></div></td>
+            <td class="px-4 py-3"><div class="skeleton h-4 w-20 rounded"></div></td>
+            <td class="px-4 py-3"><div class="skeleton h-4 w-16 rounded ml-auto"></div></td>
+            <td class="px-4 py-3"><div class="skeleton h-4 w-10 rounded mx-auto"></div></td>
+          </tr>`;
+        }
+        tbody.innerHTML = rows;
+        ['dash-income', 'dash-expense', 'dash-balance'].forEach(id => {
+          document.getElementById(id).innerHTML = '<span class="skeleton inline-block h-6 w-24 rounded"></span>';
+        });
+      }
+
+      async function loadDashboardData() {
+        showSkeleton();
+        try {
+          const data = await apiGet('dashboard');
+          if (data.success === false) {
+            Swal.fire({ icon: 'error', title: 'โหลดข้อมูลไม่สำเร็จ', text: data.message });
+            return;
+          }
+          dashCache = data;
+          renderDashboard(data);
+        } catch (err) {
+          Swal.fire({ icon: 'error', title: 'เชื่อมต่อ API ไม่สำเร็จ', text: err.message });
+        }
+      }
+
+      function renderDashboard(data) {
+        document.getElementById('dash-income').innerText = fmtCurrency(data.income);
+        document.getElementById('dash-expense').innerText = fmtCurrency(data.expense);
+        document.getElementById('dash-balance').innerText = fmtCurrency(data.balance);
+        document.getElementById('downloadExcelBtn').href = data.excelUrl;
+
+        renderTable(data.transactions);
+        renderMonthlyChart(data.monthly || []);
+        renderCategoryChart(data.byCategory || []);
+      }
+
+      function renderTable(transactions) {
+        const tbody = document.getElementById('transactionList');
+        tbody.innerHTML = '';
+
+        if (!transactions || transactions.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center text-gray-400">ยังไม่มีข้อมูล</td></tr>';
+          return;
+        }
+
+        transactions.forEach(t => {
+          const colorClass = t.type === 'income' ? 'text-green-600' : 'text-red-600';
+          const slipBtn = t.fileUrl
+            ? `<a href="${escapeHtml(t.fileUrl)}" target="_blank" class="text-gray-400 hover:text-green-600" title="ดูสลิป"><i class="fa-solid fa-paperclip"></i></a>`
+            : '';
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-gray-50 transition';
+          row.innerHTML = `
+              <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(t.date)}</td>
+              <td class="px-4 py-3 font-medium text-gray-800">${escapeHtml(t.item)}</td>
+              <td class="px-4 py-3"><span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">${escapeHtml(t.category)}</span></td>
+              <td class="px-4 py-3 text-right font-bold ${colorClass} whitespace-nowrap">${escapeHtml(t.amount)}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-3">
+                  ${slipBtn}
+                  <button class="text-gray-400 hover:text-blue-600" title="แก้ไข" data-action="edit"><i class="fa-solid fa-pen"></i></button>
+                  <button class="text-gray-400 hover:text-red-600" title="ลบ" data-action="delete"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+          `;
+          row.querySelector('[data-action="edit"]').addEventListener('click', () => openEditDialog(t));
+          row.querySelector('[data-action="delete"]').addEventListener('click', () => confirmDelete(t));
+          tbody.appendChild(row);
+        });
+      }
+
+      document.getElementById('searchBox').addEventListener('input', function(e) {
+        if (!dashCache) return;
+        const q = e.target.value.trim().toLowerCase();
+        const filtered = !q ? dashCache.transactions : dashCache.transactions.filter(t =>
+          (t.item || '').toLowerCase().includes(q) || (t.category || '').toLowerCase().includes(q)
+        );
+        renderTable(filtered);
+      });
+
+      function renderMonthlyChart(monthly) {
+        const ctx = document.getElementById('monthlyChart');
+        const labels = monthly.map(m => m.month);
+        const incomeData = monthly.map(m => m.income);
+        const expenseData = monthly.map(m => m.expense);
+
+        if (monthlyChartInstance) monthlyChartInstance.destroy();
+        monthlyChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              { label: 'รายรับ', data: incomeData, backgroundColor: '#059669' },
+              { label: 'รายจ่าย', data: expenseData, backgroundColor: '#DC2626' }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      }
+
+      function renderCategoryChart(byCategory) {
+        const ctx = document.getElementById('categoryChart');
+        const labels = byCategory.map(c => c.category);
+        const totals = byCategory.map(c => c.total);
+        const colors = ['#059669', '#DC2626', '#2563EB', '#D97706', '#7C3AED', '#DB2777', '#0891B2', '#65A30D'];
+
+        if (categoryChartInstance) categoryChartInstance.destroy();
+
+        if (labels.length === 0) {
+          categoryChartInstance = null;
+          ctx.getContext('2d').clearRect(0, 0, ctx.width, ctx.height);
+          return;
+        }
+
+        categoryChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{ data: totals, backgroundColor: colors }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+          }
+        });
+      }
+
+      // --- แก้ไขรายการ ---
+      function openEditDialog(t) {
+        Swal.fire({
+          title: 'แก้ไขรายการ',
+          html: `
+            <div class="text-left space-y-2">
+              <label class="text-xs text-gray-500">วันที่</label>
+              <input id="swal-date" type="date" class="swal2-input" value="${escapeHtml(t.rawDate)}" style="margin:0 0 8px 0;">
+              <label class="text-xs text-gray-500">รายการ</label>
+              <input id="swal-item" type="text" class="swal2-input" value="${escapeHtml(t.item)}" style="margin:0 0 8px 0;">
+              <label class="text-xs text-gray-500">หมวดหมู่</label>
+              <input id="swal-category" type="text" class="swal2-input" value="${escapeHtml(t.category)}" style="margin:0 0 8px 0;">
+              <label class="text-xs text-gray-500">รายรับ</label>
+              <input id="swal-income" type="number" step="0.01" class="swal2-input" value="${t.income || ''}" style="margin:0 0 8px 0;">
+              <label class="text-xs text-gray-500">รายจ่าย</label>
+              <input id="swal-expense" type="number" step="0.01" class="swal2-input" value="${t.expense || ''}" style="margin:0;">
+            </div>
+          `,
+          confirmButtonText: 'บันทึกการแก้ไข',
+          confirmButtonColor: '#059669',
+          showCancelButton: true,
+          cancelButtonText: 'ยกเลิก',
+          preConfirm: () => {
+            return {
+              date: document.getElementById('swal-date').value,
+              item: document.getElementById('swal-item').value,
+              category: document.getElementById('swal-category').value,
+              income: document.getElementById('swal-income').value,
+              expense: document.getElementById('swal-expense').value
+            };
+          }
+        }).then(async result => {
+          if (!result.isConfirmed) return;
+          const payload = result.value;
+          if (Number(payload.income) > 0 && Number(payload.expense) > 0) {
+            Swal.fire({ icon: 'warning', title: 'กรอกไม่ถูกต้อง', text: 'กรุณากรอกเพียงรายรับ หรือ รายจ่าย อย่างใดอย่างหนึ่ง' });
+            return;
+          }
+          Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          try {
+            const res = await apiPost({ action: 'update', rowIndex: t.rowIndex, payload: payload });
+            if (res.success) {
+              Swal.fire({ icon: 'success', title: 'แก้ไขสำเร็จ', confirmButtonColor: '#059669' });
+              loadDashboardData();
+            } else {
+              Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: res.message });
+            }
+          } catch (err) {
+            Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.message });
+          }
+        });
+      }
+
+      // --- ลบรายการ ---
+      function confirmDelete(t) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'ยืนยันการลบ?',
+          text: `ต้องการลบรายการ "${t.item}" ใช่หรือไม่`,
+          showCancelButton: true,
+          confirmButtonText: 'ลบ',
+          confirmButtonColor: '#DC2626',
+          cancelButtonText: 'ยกเลิก'
+        }).then(async result => {
+          if (!result.isConfirmed) return;
+          Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          try {
+            const res = await apiPost({ action: 'delete', rowIndex: t.rowIndex });
+            if (res.success) {
+              Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', confirmButtonColor: '#059669', timer: 1200, showConfirmButton: false });
+              loadDashboardData();
+            } else {
+              Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: res.message });
+            }
+          } catch (err) {
+            Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.message });
+          }
+        });
+      }
+
+      // --- File Preview ---
+      document.getElementById('fileInput').addEventListener('change', function(e) {
+        const wrap = document.getElementById('filePreviewWrap');
+        const img = document.getElementById('filePreviewImg');
+        const generic = document.getElementById('filePreviewGeneric');
+        const nameEl = document.getElementById('filePreviewName');
+
+        if (!e.target.files.length) {
+          wrap.classList.add('hidden');
+          return;
+        }
+        const file = e.target.files[0];
+        wrap.classList.remove('hidden');
+
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = ev => { img.src = ev.target.result; img.classList.remove('hidden'); generic.classList.add('hidden'); };
+          reader.readAsDataURL(file);
+        } else {
+          img.classList.add('hidden');
+          generic.classList.remove('hidden');
+          nameEl.innerText = file.name;
+        }
+      });
+
+      // --- Form Logic (บันทึกใหม่) ---
+      document.getElementById('accountForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const income = Number(form.income.value) || 0;
+        const expense = Number(form.expense.value) || 0;
+
+        if (income <= 0 && expense <= 0) {
+          Swal.fire({ icon: 'warning', title: 'กรอกไม่ครบ', text: 'กรุณากรอกจำนวนเงินรายรับ หรือ รายจ่าย อย่างน้อย 1 ช่อง' });
+          return;
+        }
+        if (income > 0 && expense > 0) {
+          Swal.fire({ icon: 'warning', title: 'กรอกไม่ถูกต้อง', text: 'กรุณากรอกเพียงรายรับ หรือ รายจ่าย อย่างใดอย่างหนึ่งเท่านั้น' });
+          return;
+        }
+
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.classList.add('btn-disabled');
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+        Swal.fire({ title: 'กำลังบันทึก...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        const data = {
+          date: form.date.value,
+          item: form.item.value,
+          category: form.category.value,
+          income: form.income.value,
+          expense: form.expense.value
+        };
+
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput.files.length > 0) {
+          const file = fileInput.files[0];
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            data.fileData = e.target.result;
+            data.fileName = file.name;
+            data.mimeType = file.type;
+            sendData(data);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          sendData(data);
+        }
+      });
+
+      function resetSubmitBtn() {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('btn-disabled');
+        submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูล';
+      }
+
+      async function sendData(payload) {
+        try {
+          const res = await apiPost({ action: 'create', payload: payload });
+          resetSubmitBtn();
+          if (res.success) {
+            Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'บันทึกเรียบร้อย', confirmButtonColor: '#059669' });
+            document.getElementById('accountForm').reset();
+            document.getElementById('filePreviewWrap').classList.add('hidden');
+          } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: res.message });
+          }
+        } catch (err) {
+          resetSubmitBtn();
+          Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        }
+      }
+    </script>
+  </body>
 </html>
